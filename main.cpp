@@ -47,3 +47,22 @@ void renderScore(SDL_Renderer* renderer, int score, int lives) {
         tempScore /= 10;
     } while (tempScore > 0);
 }
+int main() {
+    srand(time(0));
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window* window = SDL_CreateWindow("Space Shooter", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    Player player = { SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2, SCREEN_HEIGHT - 60 };
+    bool running = true;
+    SDL_Event event;
+    int enemySpawnCounter = 0;
+    while (running) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) running = false;
+        }
+        const Uint8* keystate = SDL_GetKeyboardState(NULL);
+        if (keystate[SDL_SCANCODE_LEFT]) player.moveLeft();
+        if (keystate[SDL_SCANCODE_RIGHT]) player.moveRight();
+        if (keystate[SDL_SCANCODE_SPACE]) {
+            bullets.push_back({ player.x + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2, player.y, BULLET_WIDTH, BULLET_HEIGHT, true });
+        }
