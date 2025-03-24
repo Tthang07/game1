@@ -66,3 +66,69 @@ int main() {
         if (keystate[SDL_SCANCODE_SPACE]) {
             bullets.push_back({ player.x + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2, player.y, BULLET_WIDTH, BULLET_HEIGHT, true });
         }
+        for (auto& bullet : bullets) {
+            if (bullet.active) {
+                bullet.y -= 10;
+                if (bullet.y < 0) bullet.active = false;
+            }
+        }
+        if (++enemySpawnCounter > 30) {
+            spawnEnemy();
+            enemySpawnCounter = 0;
+        }
+        for (auto& enemy : enemies) {
+            if (enemy.active) {
+                enemy.y += 3;
+                if (enemy.y > SCREEN_HEIGHT) {
+                    enemy.active = false;
+                    player.lives--;
+                    if (player.lives <= 0) running = false;
+                }
+            }
+        }
+
+        for (auto& bullet : bullets) {
+            if (bullet.active) {
+                for (auto& enemy : enemies) {
+                    if (enemy.active && bullet.x < enemy.x + enemy.w && bullet.x + bullet.w > enemy.x &&
+                        bullet.y < enemy.y + enemy.h && bullet.y + bullet.h > enemy.y) {
+                        enemy.active = false;
+                        bullet.active = false;
+                        player.score += 10;
+                    }
+                }
+            }
+        }
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        SDL_Rect playerRect = { player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT };
+        SDL_RenderFillRect(renderer, &playerRect);
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+        for (const auto& bullet : bullets) {
+            if (bullet.active) {
+                SDL_Rect bulletRect = { bullet.x, bullet.y, BULLET_WIDTH, BULLET_HEIGHT };
+                SDL_RenderFillRect(renderer, &bulletRect);
+            }
+        }
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        for (const auto& enemy : enemies) {
+            if (enemy.active) {
+                SDL_Rect enemyRect = { enemy.x, enemy.y, ENEMY_WIDTH, ENEMY_HEIGHT };
+                SDL_RenderFillRect(renderer, &enemyRect);
+            }
+        }
+        renderScore(renderer, player.score, player.lives);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
+    }
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    return 0;
+}
+
