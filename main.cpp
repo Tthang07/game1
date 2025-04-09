@@ -11,12 +11,12 @@ using namespace std;
 
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
-const int PLAYER_WIDTH = 60;
-const int PLAYER_HEIGHT = 120;
-const int ENEMY_WIDTH = 40;
-const int ENEMY_HEIGHT = 40;
-const int BULLET_WIDTH = 10;
-const int BULLET_HEIGHT = 20;
+const int PLAYER_WIDTH = 80;
+const int PLAYER_HEIGHT = 140;
+const int ENEMY_WIDTH = 85;
+const int ENEMY_HEIGHT = 85;
+const int BULLET_WIDTH = 40;
+const int BULLET_HEIGHT = 70;
 
 struct GameObject {
     int x, y, w, h;
@@ -64,6 +64,7 @@ int main() {
 
     SDL_Window* window = SDL_CreateWindow("Space Shooter", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
     SDL_Surface* surface = IMG_Load("tàu 1 (2).png");
     if (!surface) {
         cout << "Không thể load ảnh máy bay: " << IMG_GetError() << endl;
@@ -72,12 +73,17 @@ int main() {
     SDL_Texture* playerTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
+    SDL_Texture* bulletTexture = IMG_LoadTexture(renderer, "đạn 4.png");
+    SDL_Texture* enemyTexture = IMG_LoadTexture(renderer, "địch.png");
+    SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "nền.png");
+
     Player player = { SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2, SCREEN_HEIGHT - PLAYER_HEIGHT - 10 };
 
     bool running = true;
     SDL_Event event;
     int enemySpawnCounter = 0;
     int bulletCooldown = 0;
+
     while (running) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) running = false;
@@ -87,9 +93,7 @@ int main() {
         if (keystate[SDL_SCANCODE_LEFT]) player.moveLeft();
         if (keystate[SDL_SCANCODE_RIGHT]) player.moveRight();
 
-
         if (bulletCooldown > 0) bulletCooldown--;
-
 
         if (keystate[SDL_SCANCODE_SPACE] && bulletCooldown == 0) {
             bullets.push_back({ player.x + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2, player.y, BULLET_WIDTH, BULLET_HEIGHT, true });
@@ -135,23 +139,22 @@ int main() {
         bullets.erase(remove_if(bullets.begin(), bullets.end(), [](const GameObject& b) { return !b.active; }), bullets.end());
         enemies.erase(remove_if(enemies.begin(), enemies.end(), [](const GameObject& e) { return !e.active; }), enemies.end());
 
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, backgroundTexture, NULL, NULL);
+
         SDL_Rect playerRect = { player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT };
         SDL_RenderCopy(renderer, playerTexture, NULL, &playerRect);
 
-        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
         for (const auto& bullet : bullets) {
             if (bullet.active) {
                 SDL_Rect bulletRect = { bullet.x, bullet.y, BULLET_WIDTH, BULLET_HEIGHT };
-                SDL_RenderFillRect(renderer, &bulletRect);
+                SDL_RenderCopy(renderer, bulletTexture, NULL, &bulletRect);
             }
         }
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+
         for (const auto& enemy : enemies) {
             if (enemy.active) {
                 SDL_Rect enemyRect = { enemy.x, enemy.y, ENEMY_WIDTH, ENEMY_HEIGHT };
-                SDL_RenderFillRect(renderer, &enemyRect);
+                SDL_RenderCopy(renderer, enemyTexture, NULL, &enemyRect);
             }
         }
 
@@ -161,6 +164,9 @@ int main() {
     }
 
     SDL_DestroyTexture(playerTexture);
+    SDL_DestroyTexture(bulletTexture);
+    SDL_DestroyTexture(enemyTexture);
+    SDL_DestroyTexture(backgroundTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     IMG_Quit();
