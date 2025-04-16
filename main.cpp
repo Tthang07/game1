@@ -7,10 +7,11 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <fstream>
 using namespace std;
 
-const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 600;
+const int SCREEN_WIDTH = 1200;
+const int SCREEN_HEIGHT = 800;
 const int PLAYER_WIDTH = 80;
 const int PLAYER_HEIGHT = 140;
 const int ENEMY_WIDTH = 85;
@@ -23,18 +24,29 @@ struct GameObject {
     bool active = true;
 };
 
-struct Player {
+struct Explosion {
     int x, y;
-    int speed = 10;
-    int lives = 3;
-    int score = 0;
-    void moveLeft() { if (x > 0) x -= speed; }
-    void moveRight() { if (x < SCREEN_WIDTH - PLAYER_WIDTH) x += speed; }
+    int frame = 0;
 };
 
 vector<GameObject> bullets;
 vector<GameObject> enemies;
 vector<GameObject> enemyBullets;
+vector<Explosion> explosions;
+
+struct Player {
+    int x, y;
+    int speed = 10;
+    int lives = 3;
+    int score = 0;
+    bool invincible = false;
+    int invincibleTimer = 0;
+
+    void moveLeft() { if (x > 0) x -= speed; }
+    void moveRight() { if (x < SCREEN_WIDTH - PLAYER_WIDTH) x += speed; }
+    void moveUp() { if (y > 0) y -= speed; }
+    void moveDown() { if (y < SCREEN_HEIGHT - PLAYER_HEIGHT) y += speed; }
+};
 
 int enemyWaveCount = 0;
 
@@ -95,6 +107,7 @@ int main() {
     SDL_Texture* backgroundTexture = IMG_LoadTexture(renderer, "nền.png");
     SDL_Texture* enemyBulletTexture = IMG_LoadTexture(renderer, "đạn địch.png");
     SDL_Texture* lifeTexture = IMG_LoadTexture(renderer, "tàu 1.png");
+    SDL_Texture* explosionTexture = IMG_LoadTexture(renderer, "địch nổ.png");
 
     Player player = { SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2, SCREEN_HEIGHT - PLAYER_HEIGHT - 10 };
 
@@ -112,12 +125,21 @@ int main() {
         const Uint8* keystate = SDL_GetKeyboardState(NULL);
         if (keystate[SDL_SCANCODE_LEFT]) player.moveLeft();
         if (keystate[SDL_SCANCODE_RIGHT]) player.moveRight();
+        if (keystate[SDL_SCANCODE_UP]) player.moveUp();
+        if (keystate[SDL_SCANCODE_DOWN]) player.moveDown();
 
         if (bulletCooldown > 0) bulletCooldown--;
 
         if (keystate[SDL_SCANCODE_SPACE] && bulletCooldown == 0) {
             bullets.push_back({ player.x + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2, player.y, BULLET_WIDTH, BULLET_HEIGHT, true });
             bulletCooldown = 10;
+        }
+
+        if (player.invincible) {
+            player.invincibleTimer--;
+            if (player.invincibleTimer <= 0) {
+                player.invincible = false;
+            }
         }
 
         for (auto& bullet : bullets) {
@@ -156,6 +178,7 @@ int main() {
                     if (enemy.active &&
                         bullet.x < enemy.x + enemy.w && bullet.x + bullet.w > enemy.x &&
                         bullet.y < enemy.y + enemy.h && bullet.y + bullet.h > enemy.y) {
+                        explosions.push_back({ enemy.x, enemy.y });
                         enemy.active = false;
                         bullet.active = false;
                         player.score += 10;
@@ -171,9 +194,11 @@ int main() {
 
                 SDL_Rect bRect = { eBullet.x, eBullet.y, eBullet.w, eBullet.h };
                 SDL_Rect pRect = { player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT };
-                if (SDL_HasIntersection(&bRect, &pRect)) {
+                if (!player.invincible && SDL_HasIntersection(&bRect, &pRect)) {
                     eBullet.active = false;
                     player.lives--;
+                    player.invincible = true;
+                    player.invincibleTimer = 90; // 1.5 giây
                     if (player.lives <= 0) running = false;
                 }
             }
@@ -184,6 +209,13 @@ int main() {
         enemyBullets.erase(remove_if(enemyBullets.begin(), enemyBullets.end(), [](const GameObject& b) { return !b.active; }), enemyBullets.end());
 
         SDL_RenderCopy(renderer, backgroundTexture, NULL, NULL);
+
+        if (player.invincible && player.invincibleTimer > 80) {
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 100);
+            SDL_Rect flashRect = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
+            SDL_RenderFillRect(renderer, &flashRect);
+        }
 
         SDL_Rect playerRect = { player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT };
         SDL_RenderCopy(renderer, playerTexture, NULL, &playerRect);
@@ -209,10 +241,23 @@ int main() {
             }
         }
 
+        for (int i = 0; i < explosions.size(); ++i) {
+            SDL_Rect rect = { explosions[i].x, explosions[i].y, ENEMY_WIDTH, ENEMY_HEIGHT };
+            SDL_RenderCopy(renderer, explosionTexture, NULL, &rect);
+            explosions[i].frame++;
+        }
+        explosions.erase(remove_if(explosions.begin(), explosions.end(), [](const Explosion& e) {
+            return e.frame > 15;
+        }), explosions.end());
+
         renderScore(renderer, lifeTexture, player.lives, player.score);
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
     }
+
+    ofstream out("score.txt");
+    out << "Score: " << player.score << endl;
+    out.close();
 
     SDL_DestroyTexture(playerTexture);
     SDL_DestroyTexture(bulletTexture);
@@ -220,6 +265,7 @@ int main() {
     SDL_DestroyTexture(enemyBulletTexture);
     SDL_DestroyTexture(backgroundTexture);
     SDL_DestroyTexture(lifeTexture);
+    SDL_DestroyTexture(explosionTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     IMG_Quit();
