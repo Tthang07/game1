@@ -58,23 +58,20 @@ void spawnEnemyBullet(GameObject& enemy) {
 
 void spawnEnemyWave() {
     enemyWaveCount++;
-
     if (enemyWaveCount % 10 == 0) {
         int spacing = 90;
         int startX = 100;
         for (int i = 0; i < 5; ++i) {
             enemies.push_back({ startX + i * spacing, 0, ENEMY_WIDTH, ENEMY_HEIGHT, true });
         }
-    }
-    else if (enemyWaveCount % 15 == 0) {
+    } else if (enemyWaveCount % 15 == 0) {
         int centerX = SCREEN_WIDTH / 2;
         enemies.push_back({ centerX - ENEMY_WIDTH / 2, 0, ENEMY_WIDTH, ENEMY_HEIGHT, true });
         enemies.push_back({ centerX - ENEMY_WIDTH - 20, -ENEMY_HEIGHT, ENEMY_WIDTH, ENEMY_HEIGHT, true });
         enemies.push_back({ centerX + 20, -ENEMY_HEIGHT, ENEMY_WIDTH, ENEMY_HEIGHT, true });
         enemies.push_back({ centerX - 2 * ENEMY_WIDTH - 40, -2 * ENEMY_HEIGHT, ENEMY_WIDTH, ENEMY_HEIGHT, true });
         enemies.push_back({ centerX + 2 * ENEMY_WIDTH + 40 - ENEMY_WIDTH, -2 * ENEMY_HEIGHT, ENEMY_WIDTH, ENEMY_HEIGHT, true });
-    }
-    else {
+    } else {
         int xPos = rand() % (SCREEN_WIDTH - ENEMY_WIDTH);
         enemies.push_back({ xPos, 0, ENEMY_WIDTH, ENEMY_HEIGHT, true });
     }
@@ -87,11 +84,11 @@ void renderScore(SDL_Renderer* renderer, SDL_Texture* lifeTexture, int lives, in
     }
 }
 
-void renderText(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y) {
-    SDL_Color color = {255, 255, 255}; // Trắng
+void renderText(SDL_Renderer* renderer, TTF_Font* font, const string& text, int x, int y) {
+    SDL_Color color = { 255, 255, 255 };
     SDL_Surface* surface = TTF_RenderText_Solid(font, text.c_str(), color);
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_Rect dstRect = {x, y, surface->w, surface->h};
+    SDL_Rect dstRect = { x, y, surface->w, surface->h };
     SDL_FreeSurface(surface);
     SDL_RenderCopy(renderer, texture, NULL, &dstRect);
     SDL_DestroyTexture(texture);
@@ -101,14 +98,15 @@ int main() {
     srand(time(0));
     SDL_Init(SDL_INIT_VIDEO);
     IMG_Init(IMG_INIT_PNG);
-
-    if (TTF_Init() == -1) {
-        cout << "Không thể khởi tạo SDL_ttf: " << TTF_GetError() << endl;
-        return -1;
-    }
-
+    TTF_Init();
     SDL_Window* window = SDL_CreateWindow("Space Shooter", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+    TTF_Font* font = TTF_OpenFont("PixelFont.ttf", 28);
+    if (!font) {
+        cout << "Không thể tải font: " << TTF_GetError() << endl;
+        return -1;
+    }
 
     SDL_Surface* surface = IMG_Load("tàu 1.png");
     if (!surface) {
@@ -125,13 +123,16 @@ int main() {
     SDL_Texture* lifeTexture = IMG_LoadTexture(renderer, "tàu 1.png");
     SDL_Texture* explosionTexture = IMG_LoadTexture(renderer, "địch nổ.png");
 
-    TTF_Font* font = TTF_OpenFont("Roboto-Bold.ttf", 24);
-    if (!font) {
-        cout << "Không thể tải font: " << TTF_GetError() << endl;
-        return -1;
-    }
+    SDL_Texture* startTexture = IMG_LoadTexture(renderer, "fight.png");
+    SDL_Texture* gameOverTexture = IMG_LoadTexture(renderer, "over.jpg");
 
     Player player = { SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2, SCREEN_HEIGHT - PLAYER_HEIGHT - 10 };
+
+    // Hiển thị ảnh bắt đầu
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, startTexture, NULL, NULL);
+    SDL_RenderPresent(renderer);
+    SDL_Delay(2000);
 
     bool running = true;
     SDL_Event event;
@@ -151,7 +152,6 @@ int main() {
         if (keystate[SDL_SCANCODE_DOWN]) player.moveDown();
 
         if (bulletCooldown > 0) bulletCooldown--;
-
         if (keystate[SDL_SCANCODE_SPACE] && bulletCooldown == 0) {
             bullets.push_back({ player.x + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2, player.y, BULLET_WIDTH, BULLET_HEIGHT, true });
             bulletCooldown = 10;
@@ -159,9 +159,7 @@ int main() {
 
         if (player.invincible) {
             player.invincibleTimer--;
-            if (player.invincibleTimer <= 0) {
-                player.invincible = false;
-            }
+            if (player.invincibleTimer <= 0) player.invincible = false;
         }
 
         for (auto& bullet : bullets) {
@@ -188,9 +186,7 @@ int main() {
         for (auto& enemy : enemies) {
             if (enemy.active) {
                 enemy.y += 3;
-                if (enemy.y > SCREEN_HEIGHT) {
-                    enemy.active = false;
-                }
+                if (enemy.y > SCREEN_HEIGHT) enemy.active = false;
             }
         }
 
@@ -221,7 +217,13 @@ int main() {
                     player.lives--;
                     player.invincible = true;
                     player.invincibleTimer = 90;
-                    if (player.lives <= 0) running = false;
+                    if (player.lives <= 0) {
+                        SDL_RenderClear(renderer);
+                        SDL_RenderCopy(renderer, gameOverTexture, NULL, NULL);
+                        SDL_RenderPresent(renderer);
+                        SDL_Delay(3000);
+                        running = false;
+                    }
                 }
             }
         }
@@ -273,9 +275,7 @@ int main() {
         }), explosions.end());
 
         renderScore(renderer, lifeTexture, player.lives, player.score);
-
-        renderText(renderer, font, "Score: " + to_string(player.score), SCREEN_WIDTH - 200, 10);
-
+        renderText(renderer, font, "Score: " + to_string(player.score), 950, 10);
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
     }
@@ -285,8 +285,6 @@ int main() {
     out.close();
 
     TTF_CloseFont(font);
-    TTF_Quit();
-
     SDL_DestroyTexture(playerTexture);
     SDL_DestroyTexture(bulletTexture);
     SDL_DestroyTexture(enemyTexture);
@@ -294,8 +292,11 @@ int main() {
     SDL_DestroyTexture(backgroundTexture);
     SDL_DestroyTexture(lifeTexture);
     SDL_DestroyTexture(explosionTexture);
+    SDL_DestroyTexture(startTexture);
+    SDL_DestroyTexture(gameOverTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    TTF_Quit();
     IMG_Quit();
     SDL_Quit();
 
