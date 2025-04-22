@@ -1,6 +1,7 @@
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include <SDL_image.h>
+#include <SDL_ttf.h>
 #include <vector>
 #include <cstdlib>
 #include <ctime>
@@ -86,10 +87,25 @@ void renderScore(SDL_Renderer* renderer, SDL_Texture* lifeTexture, int lives, in
     }
 }
 
+void renderText(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y) {
+    SDL_Color color = {255, 255, 255}; // Trắng
+    SDL_Surface* surface = TTF_RenderText_Solid(font, text.c_str(), color);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_Rect dstRect = {x, y, surface->w, surface->h};
+    SDL_FreeSurface(surface);
+    SDL_RenderCopy(renderer, texture, NULL, &dstRect);
+    SDL_DestroyTexture(texture);
+}
+
 int main() {
     srand(time(0));
     SDL_Init(SDL_INIT_VIDEO);
     IMG_Init(IMG_INIT_PNG);
+
+    if (TTF_Init() == -1) {
+        cout << "Không thể khởi tạo SDL_ttf: " << TTF_GetError() << endl;
+        return -1;
+    }
 
     SDL_Window* window = SDL_CreateWindow("Space Shooter", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
@@ -108,6 +124,12 @@ int main() {
     SDL_Texture* enemyBulletTexture = IMG_LoadTexture(renderer, "đạn địch.png");
     SDL_Texture* lifeTexture = IMG_LoadTexture(renderer, "tàu 1.png");
     SDL_Texture* explosionTexture = IMG_LoadTexture(renderer, "địch nổ.png");
+
+    TTF_Font* font = TTF_OpenFont("Roboto-Bold.ttf", 24);
+    if (!font) {
+        cout << "Không thể tải font: " << TTF_GetError() << endl;
+        return -1;
+    }
 
     Player player = { SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2, SCREEN_HEIGHT - PLAYER_HEIGHT - 10 };
 
@@ -198,7 +220,7 @@ int main() {
                     eBullet.active = false;
                     player.lives--;
                     player.invincible = true;
-                    player.invincibleTimer = 90; // 1.5 giây
+                    player.invincibleTimer = 90;
                     if (player.lives <= 0) running = false;
                 }
             }
@@ -251,6 +273,9 @@ int main() {
         }), explosions.end());
 
         renderScore(renderer, lifeTexture, player.lives, player.score);
+
+        renderText(renderer, font, "Score: " + to_string(player.score), SCREEN_WIDTH - 200, 10);
+
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
     }
@@ -258,6 +283,9 @@ int main() {
     ofstream out("score.txt");
     out << "Score: " << player.score << endl;
     out.close();
+
+    TTF_CloseFont(font);
+    TTF_Quit();
 
     SDL_DestroyTexture(playerTexture);
     SDL_DestroyTexture(bulletTexture);
