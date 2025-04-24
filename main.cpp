@@ -2,6 +2,7 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <SDL_mixer.h>
 #include <vector>
 #include <cstdlib>
 #include <ctime>
@@ -96,9 +97,17 @@ void renderText(SDL_Renderer* renderer, TTF_Font* font, const string& text, int 
 
 int main() {
     srand(time(0));
-    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     IMG_Init(IMG_INIT_PNG);
     TTF_Init();
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+
+    Mix_Chunk* soundStart = Mix_LoadWAV("fight.mp3");
+    Mix_Chunk* soundExplode = Mix_LoadWAV("địch nổ.mp3");
+    Mix_Chunk* soundGameOver = Mix_LoadWAV("over.mp3");
+    Mix_Chunk* soundHit = Mix_LoadWAV("trúng đạn.mp3");
+    Mix_Chunk* soundShoot = Mix_LoadWAV("voice đạn.mp3");
+
     SDL_Window* window = SDL_CreateWindow("Space Shooter", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
@@ -128,10 +137,10 @@ int main() {
 
     Player player = { SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2, SCREEN_HEIGHT - PLAYER_HEIGHT - 10 };
 
-    // Hiển thị ảnh bắt đầu
     SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, startTexture, NULL, NULL);
     SDL_RenderPresent(renderer);
+    Mix_PlayChannel(-1, soundStart, 0);
     SDL_Delay(2000);
 
     bool running = true;
@@ -155,6 +164,7 @@ int main() {
         if (keystate[SDL_SCANCODE_SPACE] && bulletCooldown == 0) {
             bullets.push_back({ player.x + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2, player.y, BULLET_WIDTH, BULLET_HEIGHT, true });
             bulletCooldown = 10;
+            Mix_PlayChannel(-1, soundShoot, 0);
         }
 
         if (player.invincible) {
@@ -200,6 +210,7 @@ int main() {
                         enemy.active = false;
                         bullet.active = false;
                         player.score += 10;
+                        Mix_PlayChannel(-1, soundExplode, 0);
                     }
                 }
             }
@@ -217,10 +228,12 @@ int main() {
                     player.lives--;
                     player.invincible = true;
                     player.invincibleTimer = 90;
+                    Mix_PlayChannel(-1, soundHit, 0);
                     if (player.lives <= 0) {
                         SDL_RenderClear(renderer);
                         SDL_RenderCopy(renderer, gameOverTexture, NULL, NULL);
                         SDL_RenderPresent(renderer);
+                        Mix_PlayChannel(-1, soundGameOver, 0);
                         SDL_Delay(3000);
                         running = false;
                     }
@@ -283,6 +296,13 @@ int main() {
     ofstream out("score.txt");
     out << "Score: " << player.score << endl;
     out.close();
+
+    Mix_FreeChunk(soundStart);
+    Mix_FreeChunk(soundExplode);
+    Mix_FreeChunk(soundGameOver);
+    Mix_FreeChunk(soundHit);
+    Mix_FreeChunk(soundShoot);
+    Mix_CloseAudio();
 
     TTF_CloseFont(font);
     SDL_DestroyTexture(playerTexture);
