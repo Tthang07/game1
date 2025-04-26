@@ -16,7 +16,7 @@ const int SCREEN_WIDTH = 1200;
 const int SCREEN_HEIGHT = 800;
 const int PLAYER_WIDTH = 80;
 const int PLAYER_HEIGHT = 140;
-const int ENEMY_WIDTH = 85;
+const int ENEMY_WIDTH = 100;
 const int ENEMY_HEIGHT = 85;
 const int BULLET_WIDTH = 40;
 const int BULLET_HEIGHT = 70;
@@ -51,6 +51,9 @@ struct Player {
 };
 
 int enemyWaveCount = 0;
+int enemySpeed = 3;
+int enemyBulletSpeed = 6;
+int enemySpawnRate = 60;
 
 void spawnEnemyBullet(GameObject& enemy) {
     GameObject bullet = { enemy.x + enemy.w / 2 - 10, enemy.y + enemy.h, 20, 50, true };
@@ -108,6 +111,8 @@ int main() {
     Mix_Chunk* soundHit = Mix_LoadWAV("trúng đạn.mp3");
     Mix_Chunk* soundShoot = Mix_LoadWAV("voice đạn.mp3");
 
+    Mix_Music* bgMusic = Mix_LoadMUS("nhạc nền.mp3");
+
     SDL_Window* window = SDL_CreateWindow("Space Shooter", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
@@ -143,11 +148,16 @@ int main() {
     Mix_PlayChannel(-1, soundStart, 0);
     SDL_Delay(2000);
 
+    if (bgMusic) {
+        Mix_PlayMusic(bgMusic, -1);
+    }
+
     bool running = true;
     SDL_Event event;
     int enemySpawnCounter = 0;
     int enemyShootCounter = 0;
     int bulletCooldown = 0;
+    int shakeTimer = 0;
 
     while (running) {
         while (SDL_PollEvent(&event)) {
@@ -179,7 +189,7 @@ int main() {
             }
         }
 
-        if (++enemySpawnCounter > 60) {
+        if (++enemySpawnCounter > enemySpawnRate) {
             spawnEnemyWave();
             enemySpawnCounter = 0;
         }
@@ -195,7 +205,7 @@ int main() {
 
         for (auto& enemy : enemies) {
             if (enemy.active) {
-                enemy.y += 3;
+                enemy.y += enemySpeed;
                 if (enemy.y > SCREEN_HEIGHT) enemy.active = false;
             }
         }
@@ -203,14 +213,13 @@ int main() {
         for (auto& bullet : bullets) {
             if (bullet.active) {
                 for (auto& enemy : enemies) {
-                    if (enemy.active &&
-                        bullet.x < enemy.x + enemy.w && bullet.x + bullet.w > enemy.x &&
-                        bullet.y < enemy.y + enemy.h && bullet.y + bullet.h > enemy.y) {
+                    if (enemy.active && bullet.x < enemy.x + enemy.w && bullet.x + bullet.w > enemy.x && bullet.y < enemy.y + enemy.h && bullet.y + bullet.h > enemy.y) {
                         explosions.push_back({ enemy.x, enemy.y });
                         enemy.active = false;
                         bullet.active = false;
                         player.score += 10;
                         Mix_PlayChannel(-1, soundExplode, 0);
+                        shakeTimer = 10;
                     }
                 }
             }
@@ -218,7 +227,7 @@ int main() {
 
         for (auto& eBullet : enemyBullets) {
             if (eBullet.active) {
-                eBullet.y += 6;
+                eBullet.y += enemyBulletSpeed;
                 if (eBullet.y > SCREEN_HEIGHT) eBullet.active = false;
 
                 SDL_Rect bRect = { eBullet.x, eBullet.y, eBullet.w, eBullet.h };
@@ -229,6 +238,7 @@ int main() {
                     player.invincible = true;
                     player.invincibleTimer = 90;
                     Mix_PlayChannel(-1, soundHit, 0);
+                    shakeTimer = 10;
                     if (player.lives <= 0) {
                         SDL_RenderClear(renderer);
                         SDL_RenderCopy(renderer, gameOverTexture, NULL, NULL);
@@ -244,6 +254,31 @@ int main() {
         bullets.erase(remove_if(bullets.begin(), bullets.end(), [](const GameObject& b) { return !b.active; }), bullets.end());
         enemies.erase(remove_if(enemies.begin(), enemies.end(), [](const GameObject& e) { return !e.active; }), enemies.end());
         enemyBullets.erase(remove_if(enemyBullets.begin(), enemyBullets.end(), [](const GameObject& b) { return !b.active; }), enemyBullets.end());
+
+        if (player.score >= 500) {
+            enemySpeed = 6;
+            enemyBulletSpeed = 9;
+            enemySpawnRate = 40;
+        } else if (player.score >= 400) {
+            enemySpeed = 5;
+            enemyBulletSpeed = 8;
+            enemySpawnRate = 45;
+        } else if (player.score >= 200) {
+            enemySpeed = 4;
+            enemyBulletSpeed = 7;
+            enemySpawnRate = 50;
+        }
+
+        int offsetX = 0, offsetY = 0;
+        if (shakeTimer > 0) {
+            offsetX = (rand() % 5) - 2;
+            offsetY = (rand() % 5) - 2;
+            shakeTimer--;
+        }
+
+        SDL_Rect camera = { offsetX, offsetY, SCREEN_WIDTH, SCREEN_HEIGHT };
+
+        SDL_RenderSetViewport(renderer, &camera);
 
         SDL_RenderCopy(renderer, backgroundTexture, NULL, NULL);
 
@@ -289,6 +324,7 @@ int main() {
 
         renderScore(renderer, lifeTexture, player.lives, player.score);
         renderText(renderer, font, "Score: " + to_string(player.score), 950, 10);
+
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
     }
@@ -302,6 +338,7 @@ int main() {
     Mix_FreeChunk(soundGameOver);
     Mix_FreeChunk(soundHit);
     Mix_FreeChunk(soundShoot);
+    Mix_FreeMusic(bgMusic);
     Mix_CloseAudio();
 
     TTF_CloseFont(font);
