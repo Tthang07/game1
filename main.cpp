@@ -151,11 +151,9 @@ void initBoss(Boss& boss) {
     }
 }
 
-void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions) {
-    // Di chuyển boss
+void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions, int& enemyShootCounter) {
     boss.x += boss.speedX * boss.moveDirection;
 
-    // Đổi hướng khi chạm biên
     if (boss.x > boss.initialX + boss.moveRange) {
         boss.moveDirection = -1;
     }
@@ -163,10 +161,8 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions) {
         boss.moveDirection = 1;
     }
 
-    // Di chuyển lên xuống nhẹ
     boss.y += boss.speedY * sin(SDL_GetTicks() * 0.005);
 
-    // Giới hạn không ra khỏi màn hình
     boss.x = max(0, min(boss.x, SCREEN_WIDTH - BOSS_WIDTH));
     boss.y = max(50, min(boss.y, SCREEN_HEIGHT / 3));
 
@@ -192,9 +188,9 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions) {
         if (boss.skillCooldowns[SKILL_LASER] == 0 && skillChance < 20) {
             for (int i = 0; i < 3; i++) {
                 Laser laser;
-                laser.x = (SCREEN_WIDTH / 4) * (i + 1) - 20;
+                laser.x = (SCREEN_WIDTH / 4) * (i + 1) - 80;
                 laser.y = BOSS_HEIGHT + 100;
-                laser.width = 40;
+                laser.width = 160;
                 laser.height = SCREEN_HEIGHT - (BOSS_HEIGHT + 100);
                 laser.active = true;
                 laser.timer = LASER_DURATION;
@@ -246,6 +242,30 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions) {
                 boss.minions.push_back(minion);
             }
             boss.skillCooldowns[SKILL_MINIONS] = 300 / cooldownMultiplier;
+        }
+    }
+
+    for (auto& minion : boss.minions) {
+        if (minion.active) {
+            minion.y += 3;
+
+            if (rand() % 100 < 2) {
+                spawnEnemyBullet(minion);
+            }
+            SDL_Rect mRect = { minion.x, minion.y, minion.w, minion.h };
+            SDL_Rect pRect = { player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT };
+            if (SDL_HasIntersection(&mRect, &pRect)) {
+                minion.active = false;
+                if (!player.invincible) {
+                    player.lives--;
+                    player.invincible = true;
+                    player.invincibleTimer = 90;
+                    Mix_PlayChannel(-1, soundHit, 0);
+                }
+            }
+            if (minion.y > SCREEN_HEIGHT) {
+                minion.active = false;
+            }
         }
     }
 
@@ -319,29 +339,6 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions) {
         }
     }
 
-    for (auto& minion : boss.minions) {
-        if (minion.active) {
-            if (minion.x < player.x + PLAYER_WIDTH / 2) minion.x += 2;
-            else if (minion.x > player.x + PLAYER_WIDTH / 2) minion.x -= 2;
-            minion.y += 3;
-
-            SDL_Rect mRect = { minion.x, minion.y, minion.w, minion.h };
-            SDL_Rect pRect = { player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT };
-            if (SDL_HasIntersection(&mRect, &pRect)) {
-                minion.active = false;
-                if (!player.invincible) {
-                    player.lives--;
-                    player.invincible = true;
-                    player.invincibleTimer = 90;
-                }
-            }
-
-            if (minion.y > SCREEN_HEIGHT) {
-                minion.active = false;
-            }
-        }
-    }
-
     boss.lasers.erase(remove_if(boss.lasers.begin(), boss.lasers.end(),
         [](const Laser& l) { return !l.active; }), boss.lasers.end());
     boss.missiles.erase(remove_if(boss.missiles.begin(), boss.missiles.end(),
@@ -354,7 +351,7 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions) {
 
 void renderBoss(SDL_Renderer* renderer, Boss& boss, SDL_Texture* bossTexture,
                 SDL_Texture* bossShieldTexture, SDL_Texture* laserTexture,
-                SDL_Texture* missileTexture, SDL_Texture* minionTexture) {
+                SDL_Texture* bossMissileTexture, SDL_Texture* enemyTexture) {
     if (boss.health <= 0) return;
 
     SDL_Rect bossRect = { boss.x, boss.y, BOSS_WIDTH, BOSS_HEIGHT };
@@ -382,73 +379,23 @@ void renderBoss(SDL_Renderer* renderer, Boss& boss, SDL_Texture* bossTexture,
     for (const auto& missile : boss.missiles) {
         if (missile.active) {
             SDL_Rect missileRect = { missile.x, missile.y, missile.w, missile.h };
-            SDL_RenderCopy(renderer, missileTexture, NULL, &missileRect);
+            SDL_RenderCopy(renderer, bossMissileTexture, NULL, &missileRect);
         }
     }
 
     for (const auto& bullet : boss.spiralBullets) {
         if (bullet.active) {
             SDL_Rect bulletRect = { bullet.x, bullet.y, bullet.w, bullet.h };
-            SDL_RenderCopy(renderer, missileTexture, NULL, &bulletRect);
+            SDL_RenderCopy(renderer, bossMissileTexture, NULL, &bulletRect);
         }
     }
 
     for (const auto& minion : boss.minions) {
         if (minion.active) {
             SDL_Rect minionRect = { minion.x, minion.y, minion.w, minion.h };
-            SDL_RenderCopy(renderer, minionTexture, NULL, &minionRect);
+            SDL_RenderCopy(renderer, enemyTexture, NULL, &minionRect);
         }
     }
-}
-
-void renderScore(SDL_Renderer* renderer, SDL_Texture* lifeTexture, int lives, int score) {
-    for (int i = 0; i < lives; i++) {
-        SDL_Rect rect = { 10 + i * 35, 10, 30, 30 };
-        SDL_RenderCopy(renderer, lifeTexture, NULL, &rect);
-    }
-}
-
-void renderText(SDL_Renderer* renderer, TTF_Font* font, const string& text, int x, int y) {
-    SDL_Color color = { 255, 255, 255 };
-    SDL_Surface* surface = TTF_RenderText_Solid(font, text.c_str(), color);
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_Rect dstRect = { x, y, surface->w, surface->h };
-    SDL_FreeSurface(surface);
-    SDL_RenderCopy(renderer, texture, NULL, &dstRect);
-    SDL_DestroyTexture(texture);
-}
-
-void renderMenu(SDL_Renderer* renderer, TTF_Font* font, int selectedOption, int highScore) {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-
-    string options[3] = { "1. Survival", "2. Boss Fight", "3. Exit" };
-    renderText(renderer, font, "High score: " + to_string(highScore), SCREEN_WIDTH/2 - 80, 150);
-
-    for (int i = 0; i < 3; ++i) {
-        SDL_Color color = (i == selectedOption) ? SDL_Color{255, 255, 0} : SDL_Color{255, 255, 255};
-        SDL_Surface* surface = TTF_RenderText_Solid(font, options[i].c_str(), color);
-        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-        SDL_Rect rect = { SCREEN_WIDTH/2 - surface->w/2, 250 + i * 100, surface->w, surface->h };
-        SDL_FreeSurface(surface);
-        SDL_RenderCopy(renderer, texture, NULL, &rect);
-        SDL_DestroyTexture(texture);
-    }
-
-    SDL_RenderPresent(renderer);
-}
-
-void resetGame(Player& player, vector<GameObject>& bullets,
-              vector<GameObject>& enemies, vector<GameObject>& enemyBullets,
-              vector<Explosion>& explosions, int& enemyWaveCount) {
-    player = { SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2, SCREEN_HEIGHT - PLAYER_HEIGHT - 10 };
-    player.lives = 3;
-    player.score = 0;
-    bullets.clear();
-    enemies.clear();
-    enemyBullets.clear();
-    explosions.clear();
-    enemyWaveCount = 0;
 }
 
 int main() {
@@ -485,6 +432,7 @@ int main() {
     SDL_Texture* bossTexture = IMG_LoadTexture(renderer, "boss1.png");
     SDL_Texture* bossShieldTexture = IMG_LoadTexture(renderer, "khiên.png");
     SDL_Texture* missileTexture = IMG_LoadTexture(renderer, "đạn địch.png");
+    SDL_Texture* bossMissileTexture = IMG_LoadTexture(renderer, "tên lửa boss.png");
     SDL_Texture* laserTexture = IMG_LoadTexture(renderer, "laze.png");
 
     ifstream in("highscore.txt");
@@ -730,7 +678,7 @@ int main() {
                 if (player.invincibleTimer <= 0) player.invincible = false;
             }
 
-            updateBoss(boss, player, explosions);
+            updateBoss(boss, player, explosions, enemyShootCounter);
 
             for (auto& bullet : bullets) {
                 if (bullet.active) {
@@ -763,10 +711,27 @@ int main() {
                                 bullet.active = false;
                                 minion.active = false;
                                 explosions.push_back({ minion.x, minion.y });
-                                player.score += 20;
+                                player.score += 10;
                                 Mix_PlayChannel(-1, soundExplode, 0);
                             }
                         }
+                    }
+                }
+            }
+
+            for (auto& eBullet : enemyBullets) {
+                if (eBullet.active) {
+                    eBullet.y += 6;
+                    if (eBullet.y > SCREEN_HEIGHT) eBullet.active = false;
+
+                    SDL_Rect bRect = { eBullet.x, eBullet.y, eBullet.w, eBullet.h };
+                    SDL_Rect pRect = { player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT };
+                    if (!player.invincible && SDL_HasIntersection(&bRect, &pRect)) {
+                        eBullet.active = false;
+                        player.lives--;
+                        player.invincible = true;
+                        player.invincibleTimer = 90;
+                        Mix_PlayChannel(-1, soundHit, 0);
                     }
                 }
             }
@@ -817,7 +782,14 @@ int main() {
                 }
             }
 
-            renderBoss(renderer, boss, bossTexture, bossShieldTexture, laserTexture, missileTexture, enemyTexture);
+            renderBoss(renderer, boss, bossTexture, bossShieldTexture, laserTexture, bossMissileTexture, enemyTexture);
+
+            for (const auto& eBullet : enemyBullets) {
+                if (eBullet.active) {
+                    SDL_Rect rect = { eBullet.x, eBullet.y, eBullet.w, eBullet.h };
+                    SDL_RenderCopy(renderer, enemyBulletTexture, NULL, &rect);
+                }
+            }
 
             for (int i = 0; i < explosions.size(); ++i) {
                 SDL_Rect rect = { explosions[i].x, explosions[i].y, ENEMY_WIDTH, ENEMY_HEIGHT };
@@ -861,6 +833,7 @@ int main() {
     SDL_DestroyTexture(bossTexture);
     SDL_DestroyTexture(bossShieldTexture);
     SDL_DestroyTexture(missileTexture);
+    SDL_DestroyTexture(bossMissileTexture);
     SDL_DestroyTexture(laserTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
