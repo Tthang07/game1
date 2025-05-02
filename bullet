@@ -1,0 +1,16 @@
+#include "bullet."
+
+bullet::bullet()
+{
+    //ctor
+}
+
+bullet::~bullet()
+{
+    //dtor
+}
+
+bullet::bullet(const bullet& other)
+{
+    //copy ctor
+}
