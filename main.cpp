@@ -13,6 +13,10 @@
 #include <cmath>
 using namespace std;
 
+Mix_Chunk* soundHit;
+Mix_Chunk* soundExplode;
+Mix_Chunk* soundShoot;
+
 enum GameMode {
     MENU,
     SURVIVAL,
@@ -108,6 +112,14 @@ vector<Explosion> explosions;
 
 int enemyWaveCount = 0;
 int highScore = 0;
+
+void updateExplosions(vector<Explosion>& explosions) {
+    for (auto& explosion : explosions) {
+        explosion.frame++;
+    }
+    explosions.erase(remove_if(explosions.begin(), explosions.end(),
+        [](const Explosion& e) { return e.frame > 15; }), explosions.end());
+}
 
 void spawnEnemyBullet(GameObject& enemy) {
     GameObject bullet = { enemy.x + enemy.w / 2 - 10, enemy.y + enemy.h, 20, 50, true };
@@ -252,6 +264,7 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions, int& 
             if (rand() % 100 < 2) {
                 spawnEnemyBullet(minion);
             }
+
             SDL_Rect mRect = { minion.x, minion.y, minion.w, minion.h };
             SDL_Rect pRect = { player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT };
             if (SDL_HasIntersection(&mRect, &pRect)) {
@@ -263,6 +276,7 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions, int& 
                     Mix_PlayChannel(-1, soundHit, 0);
                 }
             }
+
             if (minion.y > SCREEN_HEIGHT) {
                 minion.active = false;
             }
@@ -283,6 +297,7 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions, int& 
                     player.lives--;
                     player.invincible = true;
                     player.invincibleTimer = 90;
+                    Mix_PlayChannel(-1, soundHit, 0);
                 }
             }
         }
@@ -302,6 +317,7 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions, int& 
                     player.lives--;
                     player.invincible = true;
                     player.invincibleTimer = 90;
+                    Mix_PlayChannel(-1, soundHit, 0);
                 }
             }
 
@@ -330,6 +346,7 @@ void updateBoss(Boss& boss, Player& player, vector<Explosion>& explosions, int& 
                     player.lives--;
                     player.invincible = true;
                     player.invincibleTimer = 90;
+                    Mix_PlayChannel(-1, soundHit, 0);
                 }
             }
 
@@ -398,6 +415,55 @@ void renderBoss(SDL_Renderer* renderer, Boss& boss, SDL_Texture* bossTexture,
     }
 }
 
+void renderScore(SDL_Renderer* renderer, SDL_Texture* lifeTexture, int lives, int score) {
+    for (int i = 0; i < lives; i++) {
+        SDL_Rect rect = { 10 + i * 35, 10, 30, 30 };
+        SDL_RenderCopy(renderer, lifeTexture, NULL, &rect);
+    }
+}
+
+void renderText(SDL_Renderer* renderer, TTF_Font* font, const string& text, int x, int y) {
+    SDL_Color color = { 255, 255, 255 };
+    SDL_Surface* surface = TTF_RenderText_Solid(font, text.c_str(), color);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_Rect dstRect = { x, y, surface->w, surface->h };
+    SDL_FreeSurface(surface);
+    SDL_RenderCopy(renderer, texture, NULL, &dstRect);
+    SDL_DestroyTexture(texture);
+}
+
+void renderMenu(SDL_Renderer* renderer, TTF_Font* font, int selectedOption, int highScore, SDL_Texture* menuBackgroundTexture) {
+    SDL_RenderCopy(renderer, menuBackgroundTexture, NULL, NULL);
+
+    string options[3] = { "1. Survival", "2. Boss Fight", "3. Exit" };
+    renderText(renderer, font, "High score: " + to_string(highScore), SCREEN_WIDTH/2 - 80, 150);
+
+    for (int i = 0; i < 3; ++i) {
+        SDL_Color color = (i == selectedOption) ? SDL_Color{255, 255, 0} : SDL_Color{255, 255, 255};
+        SDL_Surface* surface = TTF_RenderText_Solid(font, options[i].c_str(), color);
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_Rect rect = { SCREEN_WIDTH/2 - surface->w/2, 250 + i * 100, surface->w, surface->h };
+        SDL_FreeSurface(surface);
+        SDL_RenderCopy(renderer, texture, NULL, &rect);
+        SDL_DestroyTexture(texture);
+    }
+
+    SDL_RenderPresent(renderer);
+}
+
+void resetGame(Player& player, vector<GameObject>& bullets,
+              vector<GameObject>& enemies, vector<GameObject>& enemyBullets,
+              vector<Explosion>& explosions, int& enemyWaveCount) {
+    player = { SCREEN_WIDTH / 2 - PLAYER_WIDTH / 2, SCREEN_HEIGHT - PLAYER_HEIGHT - 10 };
+    player.lives = 3;
+    player.score = 0;
+    bullets.clear();
+    enemies.clear();
+    enemyBullets.clear();
+    explosions.clear();
+    enemyWaveCount = 0;
+}
+
 int main() {
     srand(time(0));
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
@@ -405,11 +471,11 @@ int main() {
     TTF_Init();
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
 
-    Mix_Chunk* soundStart = Mix_LoadWAV("fight.mp3");
-    Mix_Chunk* soundExplode = Mix_LoadWAV("địch nổ.mp3");
+    soundHit = Mix_LoadWAV("trúng đạn.mp3");
+    soundExplode = Mix_LoadWAV("địch nổ.mp3");
     Mix_Chunk* soundGameOver = Mix_LoadWAV("over.mp3");
-    Mix_Chunk* soundHit = Mix_LoadWAV("trúng đạn.mp3");
-    Mix_Chunk* soundShoot = Mix_LoadWAV("voice đạn.mp3");
+    soundShoot = Mix_LoadWAV("voice đạn.mp3");
+    Mix_Chunk* soundStart = Mix_LoadWAV("fight.mp3");
 
     SDL_Window* window = SDL_CreateWindow("Space Shooter", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
@@ -428,12 +494,13 @@ int main() {
     SDL_Texture* lifeTexture = IMG_LoadTexture(renderer, "tàu.png");
     SDL_Texture* explosionTexture = IMG_LoadTexture(renderer, "địch nổ.png");
     SDL_Texture* startTexture = IMG_LoadTexture(renderer, "fight.png");
-    SDL_Texture* gameOverTexture = IMG_LoadTexture(renderer, "over.jpg");
+    SDL_Texture* gameOverTexture = IMG_LoadTexture(renderer, "over.png");
     SDL_Texture* bossTexture = IMG_LoadTexture(renderer, "boss1.png");
     SDL_Texture* bossShieldTexture = IMG_LoadTexture(renderer, "khiên.png");
     SDL_Texture* missileTexture = IMG_LoadTexture(renderer, "đạn địch.png");
     SDL_Texture* bossMissileTexture = IMG_LoadTexture(renderer, "tên lửa boss.png");
     SDL_Texture* laserTexture = IMG_LoadTexture(renderer, "laze.png");
+    SDL_Texture* menuBackgroundTexture = IMG_LoadTexture(renderer, "menu.png");
 
     ifstream in("highscore.txt");
     if (in) {
@@ -491,10 +558,12 @@ int main() {
         }
 
         if (gameMode == MENU) {
-            renderMenu(renderer, font, selectedOption, highScore);
+            renderMenu(renderer, font, selectedOption, highScore, menuBackgroundTexture);
             SDL_Delay(16);
             continue;
         }
+
+        updateExplosions(explosions);
 
         if (gameMode == SURVIVAL) {
             const Uint8* keystate = SDL_GetKeyboardState(NULL);
@@ -549,7 +618,7 @@ int main() {
                         if (enemy.active &&
                             bullet.x < enemy.x + enemy.w && bullet.x + bullet.w > enemy.x &&
                             bullet.y < enemy.y + enemy.h && bullet.y + bullet.h > enemy.y) {
-                            explosions.push_back({ enemy.x, enemy.y });
+                            explosions.push_back({ enemy.x, enemy.y, 0 });
                             enemy.active = false;
                             bullet.active = false;
                             player.score += 10;
@@ -612,7 +681,6 @@ int main() {
             bullets.erase(remove_if(bullets.begin(), bullets.end(), [](const GameObject& b) { return !b.active; }), bullets.end());
             enemies.erase(remove_if(enemies.begin(), enemies.end(), [](const GameObject& e) { return !e.active; }), enemies.end());
             enemyBullets.erase(remove_if(enemyBullets.begin(), enemyBullets.end(), [](const GameObject& b) { return !b.active; }), enemyBullets.end());
-            explosions.erase(remove_if(explosions.begin(), explosions.end(), [](const Explosion& e) { return e.frame > 15; }), explosions.end());
 
             SDL_RenderCopy(renderer, backgroundTexture, NULL, NULL);
 
@@ -647,10 +715,9 @@ int main() {
                 }
             }
 
-            for (int i = 0; i < explosions.size(); ++i) {
-                SDL_Rect rect = { explosions[i].x, explosions[i].y, ENEMY_WIDTH, ENEMY_HEIGHT };
+            for (const auto& explosion : explosions) {
+                SDL_Rect rect = { explosion.x, explosion.y, ENEMY_WIDTH, ENEMY_HEIGHT };
                 SDL_RenderCopy(renderer, explosionTexture, NULL, &rect);
-                explosions[i].frame++;
             }
 
             renderScore(renderer, lifeTexture, player.lives, player.score);
@@ -693,7 +760,7 @@ int main() {
                             if (boss.state != BOSS_SHIELDED) {
                                 boss.health -= 10;
                                 if (boss.health <= 0) {
-                                    explosions.push_back({ boss.x, boss.y });
+                                    explosions.push_back({ boss.x, boss.y, 0 });
                                     player.score += 500;
                                     Mix_PlayChannel(-1, soundExplode, 0);
                                 } else {
@@ -710,7 +777,7 @@ int main() {
                             if (SDL_HasIntersection(&bRect, &mRect)) {
                                 bullet.active = false;
                                 minion.active = false;
-                                explosions.push_back({ minion.x, minion.y });
+                                explosions.push_back({ minion.x, minion.y, 0 });
                                 player.score += 10;
                                 Mix_PlayChannel(-1, soundExplode, 0);
                             }
@@ -791,10 +858,9 @@ int main() {
                 }
             }
 
-            for (int i = 0; i < explosions.size(); ++i) {
-                SDL_Rect rect = { explosions[i].x, explosions[i].y, ENEMY_WIDTH, ENEMY_HEIGHT };
+            for (const auto& explosion : explosions) {
+                SDL_Rect rect = { explosion.x, explosion.y, ENEMY_WIDTH, ENEMY_HEIGHT };
                 SDL_RenderCopy(renderer, explosionTexture, NULL, &rect);
-                explosions[i].frame++;
             }
 
             renderScore(renderer, lifeTexture, player.lives, player.score);
@@ -813,11 +879,11 @@ int main() {
         }
     }
 
-    Mix_FreeChunk(soundStart);
-    Mix_FreeChunk(soundExplode);
-    Mix_FreeChunk(soundGameOver);
     Mix_FreeChunk(soundHit);
+    Mix_FreeChunk(soundExplode);
     Mix_FreeChunk(soundShoot);
+    Mix_FreeChunk(soundGameOver);
+    Mix_FreeChunk(soundStart);
     Mix_CloseAudio();
 
     TTF_CloseFont(font);
@@ -835,6 +901,7 @@ int main() {
     SDL_DestroyTexture(missileTexture);
     SDL_DestroyTexture(bossMissileTexture);
     SDL_DestroyTexture(laserTexture);
+    SDL_DestroyTexture(menuBackgroundTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     TTF_Quit();
